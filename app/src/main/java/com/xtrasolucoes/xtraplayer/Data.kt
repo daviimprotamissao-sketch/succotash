@@ -24,7 +24,7 @@ const val AUTHOR = "xTra Soluções"
  * banco (sem barra no final) — veja cloud-playlists/README.md para o passo a passo.
  * Ex.: "https://xtra-player-default-rtdb.firebaseio.com"
  */
-const val CLOUD_DB_URL = "https://SEU-PROJETO-default-rtdb.firebaseio.com"
+const val CLOUD_DB_URL = "https://console.firebase.google.com/project/xtrasoluctions/database/xtrasoluctions-default-rtdb/data/~2F"
 
 data class Provider(val id: String, val name: String, val type: String, val server: String, val user: String, val pass: String) {
     val base: String get() = server.trim().trimEnd('/')
