@@ -18,7 +18,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.ui.graphics.drawscope.drawOutline
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -88,9 +87,16 @@ fun Modifier.tvFocus(shape: Shape = RoundedCornerShape(10.dp), scaleTo: Float = 
         .graphicsLayer { val s = 1f + (scaleTo - 1f) * anim.value; scaleX = s; scaleY = s }
         .drawWithContent {
             drawContent()
-            val a = anim.value
-            if (a > 0.01f) {
-                drawOutline(shape.createOutline(size, layoutDirection, this), Color.White.copy(alpha = a), style = Stroke(3.dp.toPx()))
+
+val a = anim.value
+
+if (a > 0.01f) {
+    drawOutline(
+        outline = shape.createOutline(size, layoutDirection, this),
+        color = Color.White.copy(alpha = a),
+        style = Stroke(3.dp.toPx())
+    )
+}
             }
         }
 }
