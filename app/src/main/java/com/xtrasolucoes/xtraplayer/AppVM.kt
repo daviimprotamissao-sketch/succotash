@@ -64,7 +64,7 @@ class AppVM(app: Application) : AndroidViewModel(app) {
                 val credential = auth.createUserWithEmailAndPassword(email.trim(), password).await()
                 credential.user?.let { user ->
                     runCatching {
-                        FirebaseDatabase.getInstance().getReference("users").child(user.uid).child("profile")
+                        FirebaseDatabase.getInstance(CLOUD_DB_URL).getReference("users").child(user.uid).child("profile")
                             .setValue(mapOf(
                                 "name" to (user.email?.substringBefore("@") ?: "Membro"),
                                 "email" to user.email,
@@ -81,7 +81,7 @@ class AppVM(app: Application) : AndroidViewModel(app) {
 
     private suspend fun refreshRole(uid: String) {
         isAdmin = try {
-            FirebaseDatabase.getInstance().getReference("admins").child(uid).get().await().getValue(Boolean::class.java) == true
+            FirebaseDatabase.getInstance(CLOUD_DB_URL).getReference("admins").child(uid).get().await().getValue(Boolean::class.java) == true
         } catch (_: Throwable) { false }
     }
 
@@ -297,7 +297,7 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = runCatching { Cloud.list(uid) }
             cloudLoading = false
-            val r = result.getOrElse { cloudError = "Falha ao sincronizar: " + (it.message ?: "verifique sua conexão"); return@launch }
+            val r = result.getOrElse { cloudError = "Falha ao sincronizar: " + (it.message ?: it.javaClass.simpleName); return@launch }
             cloudPlaylists = r
             val cloudIds = r.map { cloudId(it.key) }.toSet()
             val toAdd = r.filter { cloudId(it.key) !in providers.map { p -> p.id } }
@@ -315,8 +315,12 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         cloudLoading = true; cloudError = null
         viewModelScope.launch {
             val result = runCatching { Cloud.add(uid, name, type, server, user, pass) }
-            if (result.isFailure) cloudError = "Não foi possível salvar a playlist."
-            loadCloud()
+            if (result.isFailure) {
+                cloudLoading = false
+                cloudError = "Falha ao salvar: " + (result.exceptionOrNull()?.message ?: result.exceptionOrNull()?.javaClass?.simpleName ?: "erro desconhecido")
+            } else {
+                loadCloud()
+            }
         }
     }
 
