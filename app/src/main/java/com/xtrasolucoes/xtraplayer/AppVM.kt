@@ -127,6 +127,10 @@ class AppVM(app: Application) : AndroidViewModel(app) {
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             firebaseUser = firebaseAuth.currentUser
+            profile = null
+            favs = emptySet()
+            recent = emptyList()
+            unlocked = false
             authError = null
             isAdmin = false
             val user = firebaseAuth.currentUser
