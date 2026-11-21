@@ -114,8 +114,7 @@ class AppVM(app: Application) : AndroidViewModel(app) {
     private var extraJob: Job? = null
     private var buildJob: Job? = null
 
-    init {
-        auth.addAuthStateListener { firebaseAuth ->
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             firebaseUser = firebaseAuth.currentUser
             authError = null
             isAdmin = false
@@ -125,10 +124,25 @@ class AppVM(app: Application) : AndroidViewModel(app) {
                 loadCloud()
             } else {
                 cloudPlaylists = emptyList()
-                providers = store.providers
+                providers = providers.filterNot { it.id.startsWith("cloud_") }
+                store.providers = providers
+                if (provider.id.startsWith("cloud_")) {
+                    provider = providers.first()
+                    store.activeProvider = provider.id
+                }
             }
         }
+
+    init {
+        providers = store.providers.filterNot { it.id.startsWith("cloud_") }
+        store.providers = providers
+        auth.addAuthStateListener(authListener)
         load()
+    }
+
+    override fun onCleared() {
+        auth.removeAuthStateListener(authListener)
+        super.onCleared()
     }
 
     /**
@@ -276,7 +290,6 @@ class AppVM(app: Application) : AndroidViewModel(app) {
             val kept = providers.filter { it.id == "builtin" || !it.id.startsWith("cloud_") || it.id in cloudIds }
             if (toAdd.isNotEmpty() || kept.size != providers.size) {
                 providers = kept + toAdd
-                store.providers = providers
                 if (provider.id !in providers.map { it.id }) selectProvider(providers.first())
             }
         }
