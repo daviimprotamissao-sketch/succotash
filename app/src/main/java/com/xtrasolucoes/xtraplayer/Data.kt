@@ -14,6 +14,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.Normalizer
+import com.google.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.tasks.await
 
 const val APP_NAME = "xTra Player"
 const val AUTHOR = "xTra Soluções"
@@ -24,7 +26,7 @@ const val AUTHOR = "xTra Soluções"
  * banco (sem barra no final) — veja cloud-playlists/README.md para o passo a passo.
  * Ex.: "https://xtra-player-default-rtdb.firebaseio.com"
  */
-const val CLOUD_DB_URL = "https://console.firebase.google.com/project/xtrasoluctions/database/xtrasoluctions-default-rtdb/data/~2F"
+const val CLOUD_DB_URL = "https://xtrasoluctions-default-rtdb.europe-west1.firebasedatabase.app"
 
 data class Provider(val id: String, val name: String, val type: String, val server: String, val user: String, val pass: String) {
     val base: String get() = server.trim().trimEnd('/')
@@ -149,37 +151,32 @@ object Net {
 
 data class CloudPlaylist(val key: String, val name: String, val type: String, val server: String, val user: String, val pass: String)
 
-/**
- * Sincroniza playlists usando o endereço MAC do aparelho como chave — sem SDK nenhum, só HTTP puro
- * (igual ao resto do app), falando direto com o Firebase Realtime Database configurado em CLOUD_DB_URL.
- * O site em cloud-playlists/ lê e escreve exatamente no mesmo lugar: o que você adicionar/remover em um
- * dos dois lados aparece no outro (no app, ao abrir a aba Playlists ou tocar em "Sincronizar agora").
- */
+/** Dados privados por UID. Firebase Auth e as regras do RTDB controlam o acesso. */
 object Cloud {
-    val configured: Boolean get() = CLOUD_DB_URL.isNotBlank() && !CLOUD_DB_URL.contains("SEU-PROJETO")
-    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
-    private fun base(mac: String) = "${CLOUD_DB_URL.trimEnd('/')}/playlists/${enc(mac)}/items"
+    private val root get() = FirebaseDatabase.getInstance(CLOUD_DB_URL).reference
 
-    fun list(mac: String): List<CloudPlaylist> {
-        if (!configured) return emptyList()
-        val body = Net.get("${base(mac)}.json")
-        if (body.isBlank() || body == "null") return emptyList()
-        val obj = JSONObject(body)
-        return obj.keys().asSequence().map { k ->
-            val o = obj.getJSONObject(k)
-            CloudPlaylist(k, o.optString("name"), o.optString("type", "m3u"), o.optString("server"), o.optString("user"), o.optString("pass"))
-        }.sortedBy { it.name.lowercase() }.toList()
+    suspend fun list(uid: String): List<CloudPlaylist> {
+        val snapshot = root.child("users").child(uid).child("playlists").child("items").get().await()
+        return snapshot.children.mapNotNull { item ->
+            val key = item.key ?: return@mapNotNull null
+            CloudPlaylist(
+                key = key,
+                name = item.child("name").getValue(String::class.java).orEmpty(),
+                type = item.child("type").getValue(String::class.java) ?: "m3u",
+                server = item.child("server").getValue(String::class.java).orEmpty(),
+                user = item.child("user").getValue(String::class.java).orEmpty(),
+                pass = item.child("pass").getValue(String::class.java).orEmpty()
+            )
+        }.sortedBy { it.name.lowercase() }
     }
 
-    fun add(mac: String, name: String, type: String, server: String, user: String, pass: String) {
-        if (!configured) return
-        val body = JSONObject().put("name", name).put("type", type).put("server", server).put("user", user).put("pass", pass)
-        Net.send("${base(mac)}.json", "POST", body.toString())
+    suspend fun add(uid: String, name: String, type: String, server: String, user: String, pass: String) {
+        val ref = root.child("users").child(uid).child("playlists").child("items").push()
+        ref.setValue(mapOf("name" to name, "type" to type, "server" to server, "user" to user, "pass" to pass)).await()
     }
 
-    fun remove(mac: String, key: String) {
-        if (!configured) return
-        Net.delete("${base(mac)}/$key.json")
+    suspend fun remove(uid: String, key: String) {
+        root.child("users").child(uid).child("playlists").child("items").child(key).removeValue().await()
     }
 }
 
