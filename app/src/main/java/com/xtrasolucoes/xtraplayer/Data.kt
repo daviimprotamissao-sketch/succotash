@@ -24,7 +24,7 @@ const val AUTHOR = "xTra Soluções"
  * banco (sem barra no final) — veja cloud-playlists/README.md para o passo a passo.
  * Ex.: "https://xtra-player-default-rtdb.firebaseio.com"
  */
-const val CLOUD_DB_URL = "https://console.firebase.google.com/project/xtrasoluctions/database/xtrasoluctions-default-rtdb/data/~2F"
+const val CLOUD_DB_URL = "https://xtrasoluctions-default-rtdb.europe-west1.firebasedatabase.app"
 
 data class Provider(val id: String, val name: String, val type: String, val server: String, val user: String, val pass: String) {
     val base: String get() = server.trim().trimEnd('/')
@@ -43,8 +43,6 @@ data class Episode(val title: String, val season: Int, val num: Int, val url: St
 
 class Store(ctx: Context) {
     private val sp = ctx.getSharedPreferences("iptv", Context.MODE_PRIVATE)
-    private val builtin = Provider("builtin", "Lista padrão", "builtin", "", "", "")
-
     var providers: List<Provider>
         get() = runCatching {
             val a = JSONArray(sp.getString("providers", "[]"))
@@ -52,7 +50,7 @@ class Store(ctx: Context) {
                 val o = a.getJSONObject(it)
                 Provider(o.getString("id"), o.getString("name"), o.getString("type"), o.optString("server"), o.optString("user"), o.optString("pass"))
             }
-        }.getOrDefault(emptyList()).let { listOf(builtin) + it }
+        }.getOrDefault(emptyList())
         set(v) {
             val arr = JSONArray(v.filter { it.id != "builtin" }.map {
                 JSONObject().put("id", it.id).put("name", it.name).put("type", it.type)
@@ -75,7 +73,7 @@ class Store(ctx: Context) {
         }
 
     var activeProvider: String
-        get() = sp.getString("ap", "builtin") ?: "builtin"
+        get() = sp.getString("ap", "") ?: ""
         set(v) { sp.edit().putString("ap", v).apply() }
     var aspect: Int
         get() = sp.getInt("aspect", 0)
