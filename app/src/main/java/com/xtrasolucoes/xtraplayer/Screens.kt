@@ -4,6 +4,7 @@
 package com.xtrasolucoes.xtraplayer
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.graphics.drawscope.drawOutline
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -79,24 +80,37 @@ fun Modifier.liquid(shape: Shape = RoundedCornerShape(16.dp), solid: Color? = nu
  * então focar/desfocar não recompõe a tela. Deve vir ANTES do fundo/clickable para escalar tudo junto.
  */
 @Composable
-fun Modifier.tvFocus(shape: Shape = RoundedCornerShape(10.dp), scaleTo: Float = 1.035f): Modifier {
+
+fun Modifier.tvFocus(
+    shape: Shape = RoundedCornerShape(10.dp),
+    scaleTo: Float = 1.035f
+): Modifier {
     var f by remember { mutableStateOf(false) }
-    val anim = animateFloatAsState(if (f) 1f else 0f, tween(200, easing = FastOutSlowInEasing), label = "tvFocus")
+
+    val anim = animateFloatAsState(
+        if (f) 1f else 0f,
+        tween(200, easing = FastOutSlowInEasing),
+        label = "tvFocus"
+    )
+
     return this
         .onFocusChanged { f = it.isFocused }
-        .graphicsLayer { val s = 1f + (scaleTo - 1f) * anim.value; scaleX = s; scaleY = s }
+        .graphicsLayer {
+            val s = 1f + (scaleTo - 1f) * anim.value
+            scaleX = s
+            scaleY = s
+        }
         .drawWithContent {
             drawContent()
 
-val a = anim.value
+            val a = anim.value
 
-if (a > 0.01f) {
-    drawOutline(
-        outline = shape.createOutline(size, layoutDirection, this),
-        color = Color.White.copy(alpha = a),
-        style = Stroke(3.dp.toPx())
-    )
-}
+            if (a > 0.01f) {
+                drawOutline(
+                    shape.createOutline(size, layoutDirection, this),
+                    Color.White.copy(alpha = a),
+                    style = Stroke(3.dp.toPx())
+                )
             }
         }
 }
