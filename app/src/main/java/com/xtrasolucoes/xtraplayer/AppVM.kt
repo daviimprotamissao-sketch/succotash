@@ -14,6 +14,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.tasks.await
 
 class CatState {
     var q by mutableStateOf("")
@@ -32,6 +36,44 @@ class CatItem(val key: String, val title: String, val img: String, val cat: Stri
 }
 
 class AppVM(app: Application) : AndroidViewModel(app) {
+    private val auth = FirebaseAuth.getInstance()
+    var firebaseUser by mutableStateOf<FirebaseUser?>(auth.currentUser)
+        private set
+    var authBusy by mutableStateOf(false)
+        private set
+    var authError by mutableStateOf<String?>(null)
+        private set
+    var isAdmin by mutableStateOf(false)
+        private set
+
+    fun signIn(email: String, password: String) {
+        if (email.isBlank() || password.isBlank()) { authError = "Informe e-mail e senha."; return }
+        viewModelScope.launch {
+            authBusy = true; authError = null
+            try { auth.signInWithEmailAndPassword(email.trim(), password).await() }
+            catch (t: Throwable) { authError = t.message ?: "Não foi possível entrar." }
+            finally { authBusy = false }
+        }
+    }
+
+    fun register(email: String, password: String) {
+        if (email.isBlank() || password.length < 6) { authError = "Informe um e-mail válido e senha com pelo menos 6 caracteres."; return }
+        viewModelScope.launch {
+            authBusy = true; authError = null
+            try { auth.createUserWithEmailAndPassword(email.trim(), password).await() }
+            catch (t: Throwable) { authError = t.message ?: "Não foi possível criar a conta." }
+            finally { authBusy = false }
+        }
+    }
+
+    fun signOut() { authError = null; auth.signOut() }
+
+    private suspend fun refreshRole(uid: String) {
+        isAdmin = try {
+            FirebaseDatabase.getInstance().getReference("admins").child(uid).get().await().getValue(Boolean::class.java) == true
+        } catch (_: Throwable) { false }
+    }
+
     val store = Store(app)
     private val dir = app.filesDir
 
@@ -72,7 +114,22 @@ class AppVM(app: Application) : AndroidViewModel(app) {
     private var extraJob: Job? = null
     private var buildJob: Job? = null
 
-    init { load() }
+    init {
+        auth.addAuthStateListener { firebaseAuth ->
+            firebaseUser = firebaseAuth.currentUser
+            authError = null
+            isAdmin = false
+            val user = firebaseAuth.currentUser
+            if (user != null) viewModelScope.launch {
+                refreshRole(user.uid)
+                loadCloud()
+            } else {
+                cloudPlaylists = emptyList()
+                providers = store.providers
+            }
+        }
+        load()
+    }
 
     /**
      * Carrega a lista:
@@ -201,17 +258,17 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         if (provider.id == p.id) selectProvider(providers.first())
     }
 
-    // Playlists na nuvem (pelo MAC do aparelho)
+    // Playlists na nuvem vinculadas à conta Firebase (mesmo UID usado pelo site).
     private fun cloudId(key: String) = "cloud_$key"
 
-    /** Busca as playlists salvas no site para este MAC e as deixa disponíveis como provedores locais. */
     fun loadCloud() {
-        if (!Cloud.configured) { cloudError = "Configure CLOUD_DB_URL em Data.kt com a URL do seu banco (veja cloud-playlists/README.md)."; return }
+        val uid = firebaseUser?.uid
+        if (uid == null) { cloudPlaylists = emptyList(); cloudError = "Entre na sua conta para sincronizar."; return }
         cloudLoading = true; cloudError = null
         viewModelScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Cloud.list(deviceMac) }.getOrNull() }
+            val result = runCatching { Cloud.list(uid) }
             cloudLoading = false
-            if (r == null) { cloudError = "Não foi possível conectar ao site de playlists."; return@launch }
+            val r = result.getOrElse { cloudError = "Falha ao sincronizar: " + (it.message ?: "verifique sua conexão"); return@launch }
             cloudPlaylists = r
             val cloudIds = r.map { cloudId(it.key) }.toSet()
             val toAdd = r.filter { cloudId(it.key) !in providers.map { p -> p.id } }
@@ -225,21 +282,22 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Adiciona uma playlist: grava no site (pelo MAC) e, assim que confirma, já aparece na lista local. */
     fun addCloudPlaylist(name: String, type: String, server: String, user: String, pass: String) {
-        if (!Cloud.configured) { cloudError = "Configure CLOUD_DB_URL em Data.kt com a URL do seu banco (veja cloud-playlists/README.md)."; return }
-        cloudLoading = true
+        val uid = firebaseUser?.uid ?: run { cloudError = "Entre na sua conta primeiro."; return }
+        cloudLoading = true; cloudError = null
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { runCatching { Cloud.add(deviceMac, name, type, server, user, pass) } }
+            val result = runCatching { Cloud.add(uid, name, type, server, user, pass) }
+            if (result.isFailure) cloudError = "Não foi possível salvar a playlist."
             loadCloud()
         }
     }
 
-    /** Remove uma playlist: apaga no site (pelo MAC) e some também do aparelho. */
     fun removeCloudPlaylist(p: CloudPlaylist) {
+        val uid = firebaseUser?.uid ?: return
         cloudLoading = true
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { runCatching { Cloud.remove(deviceMac, p.key) } }
+            val result = runCatching { Cloud.remove(uid, p.key) }
+            if (result.isFailure) cloudError = "Não foi possível remover a playlist."
             providers.firstOrNull { it.id == cloudId(p.key) }?.let { deleteProvider(it) }
             loadCloud()
         }
