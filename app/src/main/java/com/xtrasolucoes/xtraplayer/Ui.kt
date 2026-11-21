@@ -82,7 +82,9 @@ fun Modifier.fadeInOnEnter(duration: Int = 260): Modifier {
 
 @Composable
 fun Root(vm: AppVM) {
-    if (vm.profile == null) ProfilePicker(vm) else Shell(vm)
+    if (vm.firebaseUser == null) AuthScreen(vm)
+    else if (vm.profile == null) ProfilePicker(vm)
+    else Shell(vm)
 }
 
 @Composable
@@ -328,6 +330,15 @@ fun SettingsScreen(vm: AppVM, onBack: () -> Unit) {
                         Text(n)
                     }
                 }
+            }
+        }
+
+        item {
+            Column(Modifier.padding(top = 12.dp)) {
+                Text("Conta", style = MaterialTheme.typography.titleMedium)
+                Text(vm.firebaseUser?.email.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                if (vm.isAdmin) Text("Administrador", color = Color(0xFFE50914), style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { vm.signOut() }) { Text("Sair da conta") }
             }
         }
 
