@@ -60,8 +60,19 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         if (email.isBlank() || password.length < 6) { authError = "Informe um e-mail válido e senha com pelo menos 6 caracteres."; return }
         viewModelScope.launch {
             authBusy = true; authError = null
-            try { auth.createUserWithEmailAndPassword(email.trim(), password).await() }
-            catch (t: Throwable) { authError = t.message ?: "Não foi possível criar a conta." }
+            try {
+                val credential = auth.createUserWithEmailAndPassword(email.trim(), password).await()
+                credential.user?.let { user ->
+                    runCatching {
+                        FirebaseDatabase.getInstance().getReference("users").child(user.uid).child("profile")
+                            .setValue(mapOf(
+                                "name" to (user.email?.substringBefore("@") ?: "Membro"),
+                                "email" to user.email,
+                                "createdAt" to com.google.firebase.database.ServerValue.TIMESTAMP
+                            )).await()
+                    }
+                }
+            } catch (t: Throwable) { authError = t.message ?: "Não foi possível criar a conta." }
             finally { authBusy = false }
         }
     }
