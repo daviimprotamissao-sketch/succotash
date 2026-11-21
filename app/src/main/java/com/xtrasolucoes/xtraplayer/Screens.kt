@@ -4,7 +4,7 @@
 package com.xtrasolucoes.xtraplayer
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.graphics.drawscope.drawOutline
+import androidx.compose.foundation.border
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -46,7 +46,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -80,7 +79,6 @@ fun Modifier.liquid(shape: Shape = RoundedCornerShape(16.dp), solid: Color? = nu
  * então focar/desfocar não recompõe a tela. Deve vir ANTES do fundo/clickable para escalar tudo junto.
  */
 @Composable
-
 fun Modifier.tvFocus(
     shape: Shape = RoundedCornerShape(10.dp),
     scaleTo: Float = 1.035f
@@ -100,20 +98,13 @@ fun Modifier.tvFocus(
             scaleX = s
             scaleY = s
         }
-        .drawWithContent {
-            drawContent()
-
-            val a = anim.value
-
-            if (a > 0.01f) {
-                drawOutline(
-                    shape.createOutline(size, layoutDirection, this),
-                    Color.White.copy(alpha = a),
-                    style = Stroke(3.dp.toPx())
-                )
-            }
-        }
+        .border(
+            width = 3.dp * anim.value,
+            color = Color.White.copy(alpha = anim.value),
+            shape = shape
+        )
 }
+
 
 // ---------- Degradê preto e branco em movimento ----------
 
