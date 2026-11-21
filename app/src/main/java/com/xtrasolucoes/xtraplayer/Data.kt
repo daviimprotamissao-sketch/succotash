@@ -153,7 +153,7 @@ data class CloudPlaylist(val key: String, val name: String, val type: String, va
 
 /** Dados privados por UID. Firebase Auth e as regras do RTDB controlam o acesso. */
 object Cloud {
-    private val root get() = FirebaseDatabase.getInstance().reference
+    private val root get() = FirebaseDatabase.getInstance(CLOUD_DB_URL).reference
 
     suspend fun list(uid: String): List<CloudPlaylist> {
         val snapshot = root.child("users").child(uid).child("playlists").child("items").get().await()
