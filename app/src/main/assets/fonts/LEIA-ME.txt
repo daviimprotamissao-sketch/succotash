@@ -1,0 +1,5 @@
+Para usar a Helvetica de verdade (licenciada por você), coloque aqui:
+  Helvetica-Regular.ttf   (ou .otf)
+  Helvetica-Bold.ttf      (ou .otf)
+  Helvetica-Light.ttf     (opcional)
+O app detecta os arquivos sozinho. Sem eles, usa Liberation Sans (licença OFL), muito parecida com a Helvetica.
