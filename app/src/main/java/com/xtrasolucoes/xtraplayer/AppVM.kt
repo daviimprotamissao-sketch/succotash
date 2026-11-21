@@ -35,10 +35,11 @@ class AppVM(app: Application) : AndroidViewModel(app) {
     val store = Store(app)
     private val dir = app.filesDir
 
+    private val emptyProvider = Provider("empty", "Nenhuma playlist", "empty", "", "", "")
     var providers by mutableStateOf(store.providers)
     var profiles by mutableStateOf(store.profiles)
     var profile by mutableStateOf<Profile?>(null)
-    var provider by mutableStateOf(providers.firstOrNull { it.id == store.activeProvider } ?: providers.first())
+    var provider by mutableStateOf(providers.firstOrNull { it.id == store.activeProvider } ?: providers.firstOrNull() ?: emptyProvider)
 
     var live by mutableStateOf<List<Live>>(emptyList())
     var vod by mutableStateOf<List<Vod>>(emptyList())
@@ -87,6 +88,13 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         loading = true
         job = viewModelScope.launch {
             try {
+                if (p.type == "empty") {
+                    live = emptyList(); vod = emptyList(); series = emptyList()
+                    liveSel = null; liveGroup = null
+                    loading = false
+                    rebuild()
+                    return@launch
+                }
                 val cached = withContext(Dispatchers.IO) { Triple(Cache.live(dir, p.id), Cache.vod(dir, p.id), Cache.series(dir, p.id)) }
                 live = cached.first; vod = cached.second; series = cached.third
                 liveSel = null; liveGroup = null
@@ -120,7 +128,7 @@ class AppVM(app: Application) : AndroidViewModel(app) {
             x.liveFrom(raw.await(), cats.await())
         }
         "m3u" -> Net.stream(p.server) { r -> M3u.parse(r.buffered().lineSequence()) }
-        else -> getApplication<Application>().assets.open("playlist.txt").bufferedReader().use { M3u.parse(it.readText()) }
+        else -> emptyList()
     }
 
     private fun loadExtras(p: Provider) {
@@ -195,10 +203,13 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         selectProvider(p)
     }
     fun deleteProvider(p: Provider) {
-        if (p.id == "builtin") return
         providers = providers.filter { it.id != p.id }
         store.providers = providers
-        if (provider.id == p.id) selectProvider(providers.first())
+        if (provider.id == p.id) {
+            provider = providers.firstOrNull() ?: emptyProvider
+            store.activeProvider = provider.id
+            load()
+        }
     }
 
     // Playlists na nuvem (pelo MAC do aparelho)
@@ -216,11 +227,11 @@ class AppVM(app: Application) : AndroidViewModel(app) {
             val cloudIds = r.map { cloudId(it.key) }.toSet()
             val toAdd = r.filter { cloudId(it.key) !in providers.map { p -> p.id } }
                 .map { Provider(cloudId(it.key), it.name, it.type, it.server, it.user, it.pass) }
-            val kept = providers.filter { it.id == "builtin" || !it.id.startsWith("cloud_") || it.id in cloudIds }
+            val kept = providers.filter { !it.id.startsWith("cloud_") || it.id in cloudIds }
             if (toAdd.isNotEmpty() || kept.size != providers.size) {
                 providers = kept + toAdd
                 store.providers = providers
-                if (provider.id !in providers.map { it.id }) selectProvider(providers.first())
+                if (provider.id !in providers.map { it.id }) providers.firstOrNull()?.let { selectProvider(it) }
             }
         }
     }
